@@ -3,6 +3,21 @@
 
 Record key sequences and replay them with custom delays to help you beat Simon-Says style challenges.
 
+## Best Used With World Markers
+
+This addon works especially well together with World of Warcraft’s **World Marker** feature.
+
+1. Place a world marker of your choice on the **starting position**.
+2. Press the **Toggle Recorder** key of S.N.E.K. to begin recording your sequence.
+3. Once the sequence is recorded and finalized, go to the starting position and replay.
+
+You can quickly place a world marker at your cursor with this macro:
+```
+/wm [@cursor] 1
+```
+This places world marker type 1 at the location under your cursor.  
+Note: WoW does **not** support automatically placing a world marker at the player’s position (`[@player]` does not work).
+
 ## Features
 
 - **Sequence Recorder** – Start and stop recording with a dedicated toggle key. Only records while the recorder is active.
@@ -22,8 +37,9 @@ Record key sequences and replay them with custom delays to help you beat Simon-S
    - **Reset / Abort** – clears the current sequence
    - **Key 1–Key 10** – the keys that can be recorded
 4. Assign a text label to each key you want to use.
-5. Press the Toggle Recorder key, enter your sequence, then stop the recorder (or reach the sequence limit).
-6. Finalize the sequence to begin playback with the configured delays.
+5. Place a world marker on the starting position (recommended).
+6. Press the Toggle Recorder key, enter your sequence, then stop the recorder (or reach the sequence limit).
+7. Finalize the sequence to begin playback with the configured delays.
 
 ## Slash Commands
 
@@ -42,5 +58,3 @@ Record key sequences and replay them with custom delays to help you beat Simon-S
 - The addon is **disabled by default**. Enable it only when you intend to use it.
 - Keybindings can also be set through the normal WoW Key Bindings menu under the **SNEK** category.
 - Changes in the options panel are saved automatically.
-
----
