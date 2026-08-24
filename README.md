@@ -58,3 +58,14 @@ Note: WoW does **not** support automatically placing a world marker at the playe
 - The addon is **disabled by default**. Enable it only when you intend to use it.
 - Keybindings can also be set through the normal WoW Key Bindings menu under the **SNEK** category.
 - Changes in the options panel are saved automatically.
+
+
+## Screenshots
+#### Full UI showcase
+![fullscreen](https://raw.githubusercontent.com/fajarvm/snek/main/screenshots/screenshot_01_full.jpg)
+
+#### Options window & minimap icon
+![options](https://raw.githubusercontent.com/fajarvm/snek/main/screenshots/screenshot_02_options.jpg)
+
+#### Addons panel
+![addons](https://raw.githubusercontent.com/fajarvm/snek/main/screenshots/screenshot_03_addons.jpg)
