@@ -1,0 +1,38 @@
+<Bindings>
+    <Binding name="SNEK_TOGGLE_RECORDER" category="SNEK">
+        SNEK_ToggleRecorder();
+    </Binding>
+    <Binding name="SNEK_RESET" category="SNEK">
+        SNEK_Reset();
+    </Binding>
+    <Binding name="SNEK_KEY1" category="SNEK">
+        SNEK_AddKey(1);
+    </Binding>
+    <Binding name="SNEK_KEY2" category="SNEK">
+        SNEK_AddKey(2);
+    </Binding>
+    <Binding name="SNEK_KEY3" category="SNEK">
+        SNEK_AddKey(3);
+    </Binding>
+    <Binding name="SNEK_KEY4" category="SNEK">
+        SNEK_AddKey(4);
+    </Binding>
+    <Binding name="SNEK_KEY5" category="SNEK">
+        SNEK_AddKey(5);
+    </Binding>
+    <Binding name="SNEK_KEY6" category="SNEK">
+        SNEK_AddKey(6);
+    </Binding>
+    <Binding name="SNEK_KEY7" category="SNEK">
+        SNEK_AddKey(7);
+    </Binding>
+    <Binding name="SNEK_KEY8" category="SNEK">
+        SNEK_AddKey(8);
+    </Binding>
+    <Binding name="SNEK_KEY9" category="SNEK">
+        SNEK_AddKey(9);
+    </Binding>
+    <Binding name="SNEK_KEY10" category="SNEK">
+        SNEK_AddKey(10);
+    </Binding>
+</Bindings>

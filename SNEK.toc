@@ -1,0 +1,14 @@
+## Interface: 120100
+## Title: S.N.E.K.
+## Notes: Sequence Next Enqueued Key - Record and replay key sequences with delay
+## Author: Sh1n
+## Version: 0.7.0
+## IconTexture: Interface\AddOns\SNEK\media\icon.png
+## SavedVariables: SNEKDB
+## Bindings: Bindings.xml
+
+Core.lua
+Database.lua
+Commands.lua
+Options.lua
+Minimap.lua
