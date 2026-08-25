@@ -23,7 +23,7 @@ local function Dispatch(msg)
     elseif msg == "reset" then
         SNEK_Reset()
     elseif msg == "version" then
-        print("|cff00ff00S.N.E.K.|r version 0.7.0")
+        print("|cff00ff00S.N.E.K.|r version " .. SNEK.VERSION)
     elseif msg == "help" then
         print("|cff00ff00S.N.E.K. commands:|r")
         print("  /snek options   - open options panel")

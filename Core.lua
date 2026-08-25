@@ -1,6 +1,9 @@
 local addonName, SNEK = ...
 SNEK = SNEK or {}
 
+-- Single source of truth for the version string
+SNEK.VERSION = "0.8.0"
+
 -- Binding display names
 _G["BINDING_NAME_SNEK_TOGGLE_RECORDER"] = "Toggle Recorder (Start/Stop)"
 _G["BINDING_NAME_SNEK_RESET"]           = "Reset / Abort Sequence"
@@ -21,12 +24,18 @@ function SNEK_ToggleRecorder()
     local db = SNEK.DB.Get()
     if not db.enabled then return end
 
-    db.isRecording = not db.isRecording
-
     if db.isRecording then
-        print("|cff00ff00S.N.E.K.:|r Recorder |cff00ff00STARTED|r")
+        -- Turning OFF → stop recording and auto-start playback if we have steps
+        db.isRecording = false
+        local count = #SNEK.sequence
+        print("|cff00ff00S.N.E.K.:|r Recorder |cffff9900STOPPED|r (" .. count .. " steps)")
+        if count > 0 then
+            SNEK_Finalize()
+        end
     else
-        print("|cff00ff00S.N.E.K.:|r Recorder |cffff9900STOPPED|r (" .. #SNEK.sequence .. " steps)")
+        -- Turning ON
+        db.isRecording = true
+        print("|cff00ff00S.N.E.K.:|r Recorder |cff00ff00STARTED|r")
     end
 end
 
@@ -93,23 +102,53 @@ function SNEK_Finalize()
     SNEK.playGeneration = SNEK.playGeneration + 1
     local gen = SNEK.playGeneration
 
-    print("|cff00ff00S.N.E.K.:|r Sequence locked (" .. #snapshot .. " steps). Starting in " .. initialDelay .. "s...")
+    -- Decide output mode once at the start of playback
+    local useSay = db.useSayChat and MessageQueue
+    if db.useSayChat and not MessageQueue then
+        print("|cffff9900S.N.E.K.:|r MessageQueue not found – falling back to local print.")
+        useSay = false
+    end
+
+    local modeText = useSay and "SAY" or "local print"
+    print("|cff00ff00S.N.E.K.:|r Sequence locked (" .. #snapshot .. " steps, " .. modeText .. "). Starting in " .. initialDelay .. "s...")
 
     local i = 1
+
+    local function finish()
+        if gen ~= SNEK.playGeneration then return end
+        SNEK.isPlaying = false
+        print("|cff00ff00S.N.E.K.:|r Playback finished.")
+    end
+
     local function nextStep()
         if gen ~= SNEK.playGeneration then return end
         if i > #snapshot then
-            SNEK.isPlaying = false
-            print("|cff00ff00S.N.E.K.:|r Playback finished.")
+            finish()
             return
         end
-        print(snapshot[i])
+
+        local text = snapshot[i]
         i = i + 1
-        if i <= #snapshot then
-            C_Timer.After(delay, nextStep)
+
+        if useSay then
+            -- Queue the SAY message; continue the chain from the callback
+            -- (after the message has actually been sent via hardware event)
+            MessageQueue.SendChatMessage(text, "SAY", nil, nil, function()
+                if gen ~= SNEK.playGeneration then return end
+                if i <= #snapshot then
+                    C_Timer.After(delay, nextStep)
+                else
+                    finish()
+                end
+            end)
         else
-            SNEK.isPlaying = false
-            print("|cff00ff00S.N.E.K.:|r Playback finished.")
+            -- Classic local print path
+            print(text)
+            if i <= #snapshot then
+                C_Timer.After(delay, nextStep)
+            else
+                finish()
+            end
         end
     end
 
@@ -125,9 +164,6 @@ function SNEK_Reset()
     print("|cff00ff00S.N.E.K.:|r Sequence cleared & playback stopped.")
 end
 
--- Manual finalize can still be triggered via slash if desired
--- (kept internal for auto-finalize on limit)
-
 -------------------------------------------------
 -- Initialization
 -------------------------------------------------
@@ -141,7 +177,7 @@ frame:SetScript("OnEvent", function(self, event, name)
     SNEK.Options.Register()
 
     local status = SNEK.DB.Get().enabled and "|cff00ff00enabled|r" or "|cffff9900disabled|r"
-    print("|cff00ff00S.N.E.K.|r v0.7 loaded (" .. status .. ").")
+    print("|cff00ff00S.N.E.K.|r v" .. SNEK.VERSION .. " loaded (" .. status .. ").")
     print("  Type |cffffff00/snek|r for commands.")
 
     self:UnregisterEvent("ADDON_LOADED")

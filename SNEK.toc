@@ -2,9 +2,10 @@
 ## Title: S.N.E.K.
 ## Notes: Sequence Next Enqueued Key - Record and replay key sequences with delay
 ## Author: Sh1n
-## Version: 0.7.0
+## Version: 0.8.0
 ## IconTexture: Interface\AddOns\SNEK\media\icon.png
 ## SavedVariables: SNEKDB
+## OptionalDeps: MessageQueue
 ## Bindings: Bindings.xml
 
 Core.lua

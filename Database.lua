@@ -11,6 +11,7 @@ local DEFAULTS = {
     autoFinalizeOnLimit = false,   -- false = just stop recording, true = auto-finalize
     showMinimap = true,
     showKeyFeedback = true,
+    useSayChat = false,            -- false = local print, true = /say via MessageQueue
     labels = {
         [1] = "left",
         [2] = "right",
