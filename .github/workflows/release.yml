@@ -12,10 +12,11 @@ permissions:
 
 jobs:
   build-and-release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@master
+      uses: actions/checkout@v4
     - name: Set tag output
       id: vars
       run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
@@ -25,6 +26,15 @@ jobs:
       run: |
         echo $RELEASE_VERSION
         echo ${{ steps.vars.outputs.tag }}
+    - name: Verify tag points at main
+      if: github.ref_type == 'tag'
+      run: |
+        git fetch origin main
+        # Ensure the tag commit is contained in origin/main
+        if ! git merge-base --is-ancestor origin/main $GITHUB_SHA; then
+          echo "Tag ${{ steps.vars.outputs.tag }} does not point at main — exiting"
+          exit 1
+        fi
     - name: Zip Release
       uses: thedoctor0/zip-release@0.7.6
       env:
