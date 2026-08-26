@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: Set tag output
+      id: vars
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+    - name: Check tag output
+      env:
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+      run: |
+        echo $RELEASE_VERSION
+        echo ${{ steps.vars.outputs.tag }}
+    - name: Zip Release
+      uses: thedoctor0/zip-release@0.7.6
+      env:
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        ZIP_FILENAME_VERSION: release-${{ steps.vars.outputs.tag }}.zip
+      with:
+        type: 'zip'
+        filename: ${{ env.ZIP_FILENAME_VERSION }}
+        # ignore folders
+        exclusions: '/*node_modules/* /*screenshots/*'
+        # ignore files recursively in any folders
+        recursive_exclusions: '*.git* *.yaml'
+    - name: GitHub Release
+      uses: softprops/action-gh-release@v3
+      env:
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        ZIP_FILENAME_VERSION: release-${{ steps.vars.outputs.tag }}.zip
+      if: github.ref_type == 'tag'
+      with:
+        draft: true
+        name: Snek ${{ env.RELEASE_VERSION }}
+        files: ${{ env.ZIP_FILENAME_VERSION }}
