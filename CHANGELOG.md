@@ -1,3 +1,9 @@
+# Changelog
+
+## v0.8.3
+
+- Update release workflow for S.N.E.K.
+
 Changelog
 =========
 
