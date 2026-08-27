@@ -18,17 +18,6 @@ You can quickly place a world marker at your cursor with this macro:
 This places world marker type 1 at the location under your cursor.  
 Note: WoW does **not** support automatically placing a world marker at the player’s position (`[@player]` does not work).
 
-## Features
-
-- **Sequence Recorder** – Start and stop recording with a dedicated toggle key. Stopping the recorder automatically starts playback (when the sequence is not empty).
-- **Up to 10 Custom Keys** – Bind any keys you want (Key 1–Key 10). Each key can have its own custom text label. Empty labels are ignored.
-- **Configurable Delays** – Set an initial delay after finalizing a sequence, plus a separate delay between each step.
-- **Sequence Limit** – Default limit of 7 steps (fully configurable). Choose whether reaching the limit simply stops recording or automatically starts playback.
-- **Playback Output** – Choose between local chat print (default) or `/say` announcements. `/say` requires the optional [MessageQueue](https://github.com/LenweSaralonde/MessageQueue) addon.
-- **Enable / Disable** – The addon starts disabled by default. Toggle it on only when you need it.
-- **Minimap Button** – Optional minimap icon for quick access to the options panel.
-- **In-game Options Panel** – Scrollable configuration window. Changes are saved automatically.
-
 ## How to Use
 
 1. Open the options panel (`/snek options` or the minimap button).
@@ -41,6 +30,17 @@ Note: WoW does **not** support automatically placing a world marker at the playe
 5. (Optional) Enable “Playback in /say (requires MessageQueue addon installed)” if you have MessageQueue installed.
 6. Place a world marker on the starting position (recommended).
 7. Press the Toggle Recorder key, enter your sequence, then press Toggle Recorder again to stop and automatically start playback (or reach the sequence limit with auto-finalize enabled).
+
+## Features
+
+- **Sequence Recorder** – Start and stop recording with a dedicated toggle key. Stopping the recorder automatically starts playback (when the sequence is not empty).
+- **Up to 10 Custom Keys** – Bind any keys you want (Key 1–Key 10). Each key can have its own custom text label. Empty labels are ignored.
+- **Configurable Delays** – Set an initial delay after finalizing a sequence, plus a separate delay between each step.
+- **Sequence Limit** – Default limit of 7 steps (fully configurable). Choose whether reaching the limit simply stops recording or automatically starts playback.
+- **Playback Output** – Choose between local chat print (default) or `/say` announcements. `/say` requires the optional [MessageQueue](https://github.com/LenweSaralonde/MessageQueue) addon.
+- **Enable / Disable** – The addon starts disabled by default. Toggle it on only when you need it.
+- **Minimap Button** – Optional minimap icon for quick access to the options panel.
+- **In-game Options Panel** – Scrollable configuration window. Changes are saved automatically.
 
 ## Slash Commands
 

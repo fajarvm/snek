@@ -59,6 +59,9 @@ permissions:
 env:
   RELEASE_BRANCH: release-please/main
   RELEASE_TITLE_PREFIX: "chore(release):"
+  # Parentheses MUST be escaped: otherwise grep -E treats (release) as a group
+  # and never matches GitHub squash titles like "chore(release): v0.8.3 (#1)"
+  RELEASE_SUBJECT_REGEX: '^chore\(release\): v[0-9]+\.[0-9]+\.[0-9]+'
 
 jobs:
   decide:
@@ -76,6 +79,7 @@ jobs:
         id: pick
         env:
           DISPATCH_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || '' }}
+          EVENT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -88,13 +92,21 @@ jobs:
           BODY=$(git log -1 --pretty=%b)
           echo "HEAD subject: ${SUBJECT}"
 
-          if echo "${SUBJECT}" | grep -Eq "^${RELEASE_TITLE_PREFIX} v[0-9]+\.[0-9]+\.[0-9]+"; then
+          if echo "${SUBJECT}" | grep -Eq "${RELEASE_SUBJECT_REGEX}"; then
             echo "mode=release" >> "$GITHUB_OUTPUT"
-            echo "Detected squash-merge of the release PR"
+            echo "Detected squash-merge of the release PR (git subject)"
             exit 0
           fi
 
-          if echo "${SUBJECT}${BODY}" | grep -q "${RELEASE_BRANCH}"; then
+          # GitHub squash titles are often "chore(release): vX.Y.Z (#N)"
+          FIRST_LINE=$(printf '%s\n' "${EVENT_MESSAGE}" | head -1)
+          if echo "${FIRST_LINE}" | grep -Eq "${RELEASE_SUBJECT_REGEX}"; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "Detected squash-merge of the release PR (event message)"
+            exit 0
+          fi
+
+          if echo "${SUBJECT}${BODY}${EVENT_MESSAGE}" | grep -Fq "${RELEASE_BRANCH}"; then
             echo "mode=release" >> "$GITHUB_OUTPUT"
             echo "Detected merge of ${RELEASE_BRANCH}"
             exit 0
@@ -167,7 +179,7 @@ jobs:
           # Commits since last tag, excluding merge + previous release-please commits
           mapfile -t RAW_COMMITS < <(
             git log ${RANGE} --pretty=%s --no-merges \
-              | grep -v -E "^${RELEASE_TITLE_PREFIX} " \
+              | grep -v -E "${RELEASE_SUBJECT_REGEX}" \
               | grep -v -E '^Merge ' \
               || true
           )
@@ -226,25 +238,24 @@ jobs:
 
           # Prepend changelog section (idempotent if we re-run for the same version)
           python3 - "${NEXT}" "${NOTES}" <<'PY'
-          import pathlib, sys
+          import pathlib, re, sys
           next_ver, notes = sys.argv[1], sys.argv[2]
           path = pathlib.Path("CHANGELOG.md")
           text = path.read_text(encoding="utf-8") if path.exists() else "# Changelog\n"
-          section = f"## v{next_ver}\n\n{notes.strip()}\n"
-          # Drop a previous draft section for this same version if we are refreshing the PR
-          import re
+
+          # Drop a previous draft section for this same version (any heading style)
           text = re.sub(
-              rf"^## v{re.escape(next_ver)}\n\n.*?(?=^## |\Z)",
+              rf"^#{1,3}[ \t]+v?{re.escape(next_ver)}[ \t]*\n(?:[=-]{{3,}}\n)?.*?(?=^#{1,3}[ \t]+|\Z)",
               "",
               text,
               count=1,
               flags=re.M | re.S,
           )
-          if text.startswith("# Changelog"):
-              rest = text[len("# Changelog"):].lstrip("\n")
-              text = f"# Changelog\n\n{section}\n{rest}".rstrip() + "\n"
-          else:
-              text = f"# Changelog\n\n{section}\n{text}".rstrip() + "\n"
+          # Avoid a duplicated "# Changelog" title after the new section
+          text = re.sub(r"^# Changelog[ \t]*\n+", "", text, count=1, flags=re.M)
+          text = text.lstrip("\n")
+          section = f"## v{next_ver}\n\n{notes.strip()}\n"
+          text = f"# Changelog\n\n{section}\n{text}".rstrip() + "\n"
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -333,14 +344,22 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "zip=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
 
-          # Extract just this version's changelog section for the release body
+          # Extract ONLY this version's bullets for the GitHub Release body
           python3 - "${VERSION}" <<'PY'
           import pathlib, re, sys
           ver = sys.argv[1]
           text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8") if pathlib.Path("CHANGELOG.md").exists() else ""
-          m = re.search(rf"^## v{re.escape(ver)}\n\n(.*?)(?=^## |\Z)", text, flags=re.M | re.S)
+          heading = re.search(rf"^#{1,3}[ \t]+v?{re.escape(ver)}[ \t]*$", text, flags=re.M)
+          notes = ""
+          if heading:
+              rest = text[heading.end():]
+              rest = re.sub(r"^\s*[=-]{3,}\s*\n", "", rest)
+              # Stop at the next markdown heading (#, ##, ###) so older versions
+              # and a leftover "# Changelog" title cannot leak into this release.
+              stop = re.search(r"^#{1,3}[ \t]+", rest, flags=re.M)
+              notes = (rest[:stop.start()] if stop else rest).strip()
           body = f"## S.N.E.K. v{ver}\n\n"
-          body += (m.group(1).strip() + "\n") if m else "See CHANGELOG.md.\n"
+          body += (notes + "\n") if notes else "See CHANGELOG.md.\n"
           pathlib.Path("release-notes.md").write_text(body, encoding="utf-8")
           PY
 
