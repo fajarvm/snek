@@ -1,63 +1,383 @@
+# S.N.E.K. release workflow (release-please style)
+#
+# Lifecycle
+# ---------
+# 1. Commits land on `main`.
+# 2. This workflow opens / updates a long-lived PR from branch
+#    `release-please/main` titled `chore(release): vX.Y.Z`.
+#    The PR bumps SNEK.toc + Core.lua and prepends a CHANGELOG section
+#    listing commits since the last release tag.
+# 3. When that PR looks good, squash-merge it into `main`.
+# 4. The merge commit (title starts with `chore(release): vX.Y.Z`) triggers
+#    the release job, which:
+#      - creates tag vX.Y.Z
+#      - builds an addon-only ZIP (no .github, screenshots, pkgmeta, git)
+#      - publishes a GitHub Release and uploads the ZIP as an asset
+# 5. The next commit on `main` starts the cycle again.
+#
+# Manual runs
+# -----------
+# Actions → Release → Run workflow
+#   action = prepare | release
+#   bump   = patch | minor | major   (prepare only)
+#
+# Override the next version by putting this in a commit message on main:
+#   Release-As: 0.9.0
+# or bump type:
+#   bump:minor   /   bump:major   /   [minor]   /   [major]
+#
+# Merge the release PR with "Squash and merge" so the commit title stays
+# `chore(release): vX.Y.Z`. A regular merge commit also works if GitHub
+# records the source branch as `release-please/main`.
+
 name: Release
 
 on:
   push:
-    branches: [ "main" ]
-    tags:
-      - "v*.*.*"
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      action:
+        description: "prepare = update the release PR; release = publish from current main"
+        type: choice
+        options: [prepare, release]
+        default: prepare
+      bump:
+        description: "Version bump used when preparing the next release PR"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+concurrency:
+  group: snek-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
+  pull-requests: write
+
+env:
+  RELEASE_BRANCH: release-please/main
+  RELEASE_TITLE_PREFIX: "chore(release):"
 
 jobs:
-  build-and-release:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' }}
+  decide:
+    name: Decide prepare vs release
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.pick.outputs.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Pick mode
+        id: pick
+        env:
+          DISPATCH_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${DISPATCH_ACTION}" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch → ${DISPATCH_ACTION}"
+            exit 0
+          fi
+
+          SUBJECT=$(git log -1 --pretty=%s)
+          BODY=$(git log -1 --pretty=%b)
+          echo "HEAD subject: ${SUBJECT}"
+
+          if echo "${SUBJECT}" | grep -Eq "^${RELEASE_TITLE_PREFIX} v[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "Detected squash-merge of the release PR"
+            exit 0
+          fi
+
+          if echo "${SUBJECT}${BODY}" | grep -q "${RELEASE_BRANCH}"; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "Detected merge of ${RELEASE_BRANCH}"
+            exit 0
+          fi
+
+          echo "mode=prepare" >> "$GITHUB_OUTPUT"
+          echo "Normal main commit → prepare release PR"
+
+  prepare:
+    name: Prepare release PR
+    needs: decide
+    if: needs.decide.outputs.mode == 'prepare'
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Set tag output
-      id: vars
-      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
-    - name: Check tag output
-      env:
-        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
-      run: |
-        echo $RELEASE_VERSION
-        echo ${{ steps.vars.outputs.tag }}
-    - name: Verify tag points at main
-      if: github.ref_type == 'tag'
-      run: |
-        git fetch origin main
-        # Ensure the tag commit is contained in origin/main
-        if ! git merge-base --is-ancestor origin/main $GITHUB_SHA; then
-          echo "Tag ${{ steps.vars.outputs.tag }} does not point at main — exiting"
-          exit 1
-        fi
-    - name: Zip Release
-      uses: thedoctor0/zip-release@0.7.6
-      env:
-        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
-        ZIP_FILENAME_VERSION: release-${{ steps.vars.outputs.tag }}.zip
-      with:
-        type: 'zip'
-        filename: ${{ env.ZIP_FILENAME_VERSION }}
-        exclusions: |
-          *.git*
-          /*node_modules/*
-          /*screenshots/*
-        recursive_exclusions: |
-          *.git*
-          *.y*ml
-          *.yaml
-    - name: GitHub Release
-      uses: softprops/action-gh-release@v3
-      env:
-        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
-        ZIP_FILENAME_VERSION: Snek-${{ steps.vars.outputs.tag }}.zip
-      if: github.ref_type == 'tag'
-      with:
-        draft: false
-        name: Snek ${{ env.RELEASE_VERSION }}
-        files: ${{ env.ZIP_FILENAME_VERSION }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect commits and open/update PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # ----- helpers -----
+          toc_version() {
+            grep -E '^## Version:' SNEK.toc | head -1 | awk '{print $3}' | tr -d '\r'
+          }
+
+          changelog_version() {
+            grep -E '^## v?[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md \
+              | head -1 \
+              | sed -E 's/^## v?//' \
+              | tr -d '\r' || true
+          }
+
+          last_tag() {
+            git tag -l 'v*.*.*' --sort=-v:refname | head -1 || true
+          }
+
+          bump_semver() {
+            local ver="$1" kind="$2"
+            IFS=. read -r MA MI PA <<EOF
+          ${ver}
+          EOF
+            case "${kind}" in
+              major) echo "$((MA+1)).0.0" ;;
+              minor) echo "${MA}.$((MI+1)).0" ;;
+              *)     echo "${MA}.${MI}.$((PA+1))" ;;
+            esac
+          }
+
+          LAST_TAG=$(last_tag)
+          if [ -n "${LAST_TAG}" ]; then
+            CURRENT="${LAST_TAG#v}"
+            RANGE="${LAST_TAG}..origin/main"
+            echo "Last tag: ${LAST_TAG}"
+          else
+            CURRENT="$(changelog_version)"
+            [ -n "${CURRENT}" ] || CURRENT="$(toc_version)"
+            RANGE="origin/main"
+            echo "No tags yet. Current version from changelog/TOC: ${CURRENT}"
+          fi
+
+          # Commits since last tag, excluding merge + previous release-please commits
+          mapfile -t RAW_COMMITS < <(
+            git log ${RANGE} --pretty=%s --no-merges \
+              | grep -v -E "^${RELEASE_TITLE_PREFIX} " \
+              | grep -v -E '^Merge ' \
+              || true
+          )
+
+          # If RANGE is the whole branch and we have a changelog version, still list
+          # recent product commits. Empty list → nothing to release.
+          COMMITS=()
+          for c in "${RAW_COMMITS[@]+"${RAW_COMMITS[@]}"}"; do
+            [ -n "${c}" ] && COMMITS+=("${c}")
+          done
+
+          if [ ${#COMMITS[@]} -eq 0 ]; then
+            echo "No new commits since last release — closing leftover PR if any."
+            EXISTING=$(gh pr list --repo "${GITHUB_REPOSITORY}" \
+              --head "${RELEASE_BRANCH}" --base main --state open \
+              --json number --jq '.[0].number // empty' || true)
+            if [ -n "${EXISTING}" ]; then
+              gh pr close "${EXISTING}" --repo "${GITHUB_REPOSITORY}" \
+                --comment "Closed automatically: nothing left to release." || true
+            fi
+            exit 0
+          fi
+
+          echo "Tracked commits (${#COMMITS[@]}):"
+          printf '  - %s\n' "${COMMITS[@]}"
+
+          # Decide bump
+          KIND="${BUMP_INPUT}"
+          RELEASE_AS=""
+          ALL_MSG=$(git log ${RANGE} --pretty=%B)
+          if echo "${ALL_MSG}" | grep -Eq '^Release-As:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+'; then
+            RELEASE_AS=$(echo "${ALL_MSG}" | grep -Eo '^Release-As:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' | tail -1 | awk '{print $2}')
+          fi
+          if echo "${ALL_MSG}" | grep -Eq '(^|[[:space:]])bump:major([[:space:]]|$)|\[major\]'; then
+            KIND=major
+          elif echo "${ALL_MSG}" | grep -Eq '(^|[[:space:]])bump:minor([[:space:]]|$)|\[minor\]'; then
+            KIND=minor
+          fi
+
+          if [ -n "${RELEASE_AS}" ]; then
+            NEXT="${RELEASE_AS}"
+          else
+            NEXT=$(bump_semver "${CURRENT}" "${KIND}")
+          fi
+          echo "Next version: ${NEXT} (from ${CURRENT}, bump=${KIND})"
+
+          NOTES=$(printf -- '- %s\n' "${COMMITS[@]}")
+
+          # ----- build the release-please branch from current main -----
+          git fetch origin main
+          git checkout -B "${RELEASE_BRANCH}" origin/main
+
+          # Bump version files
+          sed -i -E "s/^## Version: .*/## Version: ${NEXT}/" SNEK.toc
+          sed -i -E "s/SNEK\\.VERSION = \"[0-9]+\\.[0-9]+\\.[0-9]+\"/SNEK.VERSION = \"${NEXT}\"/" Core.lua
+
+          # Prepend changelog section (idempotent if we re-run for the same version)
+          python3 - "${NEXT}" "${NOTES}" <<'PY'
+          import pathlib, sys
+          next_ver, notes = sys.argv[1], sys.argv[2]
+          path = pathlib.Path("CHANGELOG.md")
+          text = path.read_text(encoding="utf-8") if path.exists() else "# Changelog\n"
+          section = f"## v{next_ver}\n\n{notes.strip()}\n"
+          # Drop a previous draft section for this same version if we are refreshing the PR
+          import re
+          text = re.sub(
+              rf"^## v{re.escape(next_ver)}\n\n.*?(?=^## |\Z)",
+              "",
+              text,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if text.startswith("# Changelog"):
+              rest = text[len("# Changelog"):].lstrip("\n")
+              text = f"# Changelog\n\n{section}\n{rest}".rstrip() + "\n"
+          else:
+              text = f"# Changelog\n\n{section}\n{text}".rstrip() + "\n"
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          git add SNEK.toc Core.lua CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No file changes (branch already up to date)."
+          else
+            git commit -m "${RELEASE_TITLE_PREFIX} v${NEXT}"
+          fi
+
+          git push -f origin "${RELEASE_BRANCH}"
+
+          # PR body
+          {
+            echo "## Release v${NEXT}"
+            echo
+            echo "This is the standing release PR for **S.N.E.K.**"
+            echo
+            echo "Merging it (squash merge recommended) will:"
+            echo "- tag \`v${NEXT}\`"
+            echo "- write this changelog section into \`CHANGELOG.md\`"
+            echo "- publish a GitHub Release with an addon-only ZIP attached"
+            echo
+            echo "### Tracked changes since ${LAST_TAG:-the beginning}"
+            echo
+            echo "${NOTES}"
+            echo
+            echo "---"
+            echo
+            echo "Bump used: **${KIND}** (current released version: **${CURRENT}**)."
+            echo
+            echo "To force a specific version, push a commit on \`main\` containing:"
+            echo '```'
+            echo "Release-As: 1.0.0"
+            echo '```'
+            echo "To bump minor/major instead of patch, include \`bump:minor\`, \`bump:major\`, \`[minor]\` or \`[major]\` in a commit message."
+          } > /tmp/pr-body.md
+
+          gh label create release --repo "${GITHUB_REPOSITORY}" \
+            --description "Standing release-please PR" --color "0E8A16" 2>/dev/null || true
+
+          PR_NUMBER=$(gh pr list --repo "${GITHUB_REPOSITORY}" \
+            --head "${RELEASE_BRANCH}" --base main --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "${PR_NUMBER}" ]; then
+            gh pr edit "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_TITLE_PREFIX} v${NEXT}" \
+              --body-file /tmp/pr-body.md
+            echo "Updated existing PR #${PR_NUMBER}"
+          else
+            gh pr create --repo "${GITHUB_REPOSITORY}" \
+              --base main --head "${RELEASE_BRANCH}" \
+              --title "${RELEASE_TITLE_PREFIX} v${NEXT}" \
+              --body-file /tmp/pr-body.md \
+              --label release
+            echo "Opened new release PR"
+          fi
+
+  release:
+    name: Publish GitHub release
+    needs: decide
+    if: needs.decide.outputs.mode == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version and build addon ZIP
+        id: build
+        run: |
+          set -euo pipefail
+
+          VERSION=$(grep -E '^## Version:' SNEK.toc | head -1 | awk '{print $3}' | tr -d '\r')
+          if ! echo "${VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Could not parse version from SNEK.toc (got '${VERSION}')" >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          ZIP_NAME="SNEK-${TAG}.zip"
+          echo "Releasing ${TAG}"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "zip=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+
+          # Extract just this version's changelog section for the release body
+          python3 - "${VERSION}" <<'PY'
+          import pathlib, re, sys
+          ver = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8") if pathlib.Path("CHANGELOG.md").exists() else ""
+          m = re.search(rf"^## v{re.escape(ver)}\n\n(.*?)(?=^## |\Z)", text, flags=re.M | re.S)
+          body = f"## S.N.E.K. v{ver}\n\n"
+          body += (m.group(1).strip() + "\n") if m else "See CHANGELOG.md.\n"
+          pathlib.Path("release-notes.md").write_text(body, encoding="utf-8")
+          PY
+
+          # Addon-only payload. Folder name must be SNEK to match
+          # Interface\AddOns\SNEK\... paths in the TOC.
+          STAGE=$(mktemp -d)
+          mkdir -p "${STAGE}/SNEK/media"
+          cp Bindings.xml Commands.lua Core.lua Database.lua \
+             LICENSE Minimap.lua Options.lua README.md CHANGELOG.md SNEK.toc \
+             "${STAGE}/SNEK/"
+          cp media/icon.png media/minimap.png "${STAGE}/SNEK/media/"
+
+          (cd "${STAGE}" && zip -r "${GITHUB_WORKSPACE}/${ZIP_NAME}" SNEK)
+          echo "Built ${ZIP_NAME} ($(du -h "${ZIP_NAME}" | cut -f1))"
+          unzip -l "${ZIP_NAME}"
+
+      - name: Create tag
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists locally"
+          else
+            git tag "${TAG}"
+          fi
+          git push origin "refs/tags/${TAG}"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.build.outputs.tag }}
+          name: S.N.E.K. ${{ steps.build.outputs.tag }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: ${{ steps.build.outputs.zip }}
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
