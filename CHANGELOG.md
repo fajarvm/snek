@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.5
+
+- Update README.md
+- ci: update changelog regex
+
 ## v0.8.4
 
 - update screenshots
