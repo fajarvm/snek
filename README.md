@@ -59,7 +59,7 @@ Note: WoW does **not** support automatically placing a world marker at the playe
 - The addon is **disabled by default**. Enable it only when you intend to use it.
 - Keybindings can also be set through the normal WoW Key Bindings menu under the **SNEK** category.
 - Changes in the options panel are saved automatically.
-- **MessageQueue** is an *optional* dependency. Without it, playback always uses local print. With it, you can choose `/say` output. For fully hands-free `/say` playback you may also want the AutoHotkey PixelTrigger script that ships with MessageQueue.
+- **MessageQueue** is an *optional* dependency. Without it, playback always uses local print. With it, you can choose `/say` output.
 
 ## Screenshots
 #### Full UI showcase
