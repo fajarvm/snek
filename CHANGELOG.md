@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.4
+
+- update screenshots
+- Set default value for timing options
+- Update release workflow and doc files
+
 ## v0.8.3
 - Update release workflow for S.N.E.K.
 
