@@ -2,7 +2,7 @@ local addonName, SNEK = ...
 SNEK = SNEK or {}
 
 -- Single source of truth for the version string
-SNEK.VERSION = "0.8.3"
+SNEK.VERSION = "0.8.4"
 
 -- Binding display names
 _G["BINDING_NAME_SNEK_TOGGLE_RECORDER"] = "Toggle Recorder (Start/Stop)"
