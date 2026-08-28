@@ -88,8 +88,8 @@ function SNEK_Finalize()
         return
     end
 
-    local delay = tonumber(db.delay) or 3
-    local initialDelay = tonumber(db.initialDelay) or 3
+    local delay = tonumber(db.delay) or 2.8
+    local initialDelay = tonumber(db.initialDelay) or 2.5
 
     local snapshot = {}
     for i, v in ipairs(seq) do

@@ -5,10 +5,10 @@ SNEK.DB = {}
 local DEFAULTS = {
     enabled = false,
     isRecording = false,
-    delay = 3,
-    initialDelay = 3,
+    delay = 2.8,
+    initialDelay = 2.5,
     sequenceLimit = 7,
-    autoFinalizeOnLimit = false,   -- false = just stop recording, true = auto-finalize
+    autoFinalizeOnLimit = true,    -- start playback when the sequence limit is hit
     showMinimap = true,
     showKeyFeedback = true,
     useSayChat = false,            -- false = local print, true = /say via MessageQueue
