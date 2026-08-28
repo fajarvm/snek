@@ -70,3 +70,6 @@ Note: WoW does **not** support automatically placing a world marker at the playe
 
 #### Addons panel
 ![addons](https://raw.githubusercontent.com/fajarvm/snek/main/screenshots/screenshot_03_addons.jpg)
+
+#### Keybindings panel
+![keybindings](https://raw.githubusercontent.com/fajarvm/snek/main/screenshots/screenshot_04_keybindings.jpg)
